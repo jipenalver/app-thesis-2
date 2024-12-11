@@ -1,9 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; 
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
-void main() {
+Future<void> main() async {
+  await Supabase.initialize(
+    url: 'https://xyzcompany.supabase.co',
+    anonKey: 'public-anon-key',
+  );
   runApp(const MyApp());
 }
 
@@ -68,9 +73,12 @@ class _MyAppState extends State<MyApp> {
       _accessToken = result.accessToken;
       _printCredentials();
       // get the user data
-      // by default we get the userId, email,name and picture
-      final userData = await FacebookAuth.instance.getUserData();
-      // final userData = await FacebookAuth.instance.getUserData(fields: "email,birthday,friends,gender,link");
+      // final userData = await FacebookAuth.instance.getUserData();
+      final userData = await FacebookAuth.instance.getUserData(fields: "id,name,email,birthday,picture.width(200),posts");
+
+      // Get a reference your Supabase client
+      final supabase = Supabase.instance.client;
+      
       _userData = userData;
     } else {
       print(result.status);
