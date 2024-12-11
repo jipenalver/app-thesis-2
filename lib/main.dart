@@ -1,14 +1,18 @@
 import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
 Future<void> main() async {
+  await dotenv.load();
+
   await Supabase.initialize(
-    url: 'https://xyzcompany.supabase.co',
-    anonKey: 'public-anon-key',
+    url: dotenv.env['SUPABASE_URL'] ?? '',
+    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
   );
+
   runApp(const MyApp());
 }
 
@@ -44,7 +48,8 @@ class _MyAppState extends State<MyApp> {
     if (accessToken != null) {
       print("is Logged:::: ${prettyPrint(accessToken.toJson())}");
       // now you can call to  FacebookAuth.instance.getUserData();
-      final userData = await FacebookAuth.instance.getUserData();
+      final userData = await FacebookAuth.instance.getUserData(
+          fields: "id,name,email,birthday,picture.width(200),posts");
       // final userData = await FacebookAuth.instance.getUserData(fields: "email,birthday,friends,gender,link");
       _accessToken = accessToken;
       setState(() {
@@ -74,11 +79,32 @@ class _MyAppState extends State<MyApp> {
       _printCredentials();
       // get the user data
       // final userData = await FacebookAuth.instance.getUserData();
-      final userData = await FacebookAuth.instance.getUserData(fields: "id,name,email,birthday,picture.width(200),posts");
+      final userData = await FacebookAuth.instance.getUserData(
+          fields: "id,name,email,birthday,picture.width(200),posts");
 
-      // Get a reference your Supabase client
+      // Get Supabase client
       final supabase = Supabase.instance.client;
-      
+
+      // Delete existing entries for the user
+      await supabase.from('fetches').delete().eq('email', userData['email']);
+
+      // Map user posts
+      final userPosts = userData['posts']['data'].map((post) {
+        return {
+          'created_at': post['created_time'],
+          'message': post['message'] ?? '', // Handle missing messages
+          'email': userData['email'],
+          'post_id': post['id'],
+        };
+      }).toList();
+
+      // Insert posts into Supabase
+      if (userPosts.isNotEmpty) {
+        await supabase.from('fetches').insert(userPosts);
+      } else {
+        print("No posts to insert.");
+      }
+
       _userData = userData;
     } else {
       print(result.status);
@@ -89,7 +115,6 @@ class _MyAppState extends State<MyApp> {
       _checking = false;
     });
   }
-
 
   Future<void> _logOut() async {
     await FacebookAuth.instance.logOut();
@@ -116,7 +141,9 @@ class _MyAppState extends State<MyApp> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: <Widget>[
                       Text(
-                        _userData != null ? prettyPrint(_userData!) : "NO LOGGED",
+                        _userData != null
+                            ? prettyPrint(_userData!)
+                            : "NO LOGGED",
                       ),
                       const SizedBox(height: 20),
                       _accessToken != null
@@ -128,7 +155,7 @@ class _MyAppState extends State<MyApp> {
                       CupertinoButton(
                         color: Colors.blue,
                         child: Text(
-                          _userData != null ? "LOGOUT" : "LOGIN",
+                          _userData != null ? "LOGOUT" : "LOGIN WITH FACEBOOK",
                           style: const TextStyle(color: Colors.white),
                         ),
                         onPressed: _userData != null ? _logOut : _login,
